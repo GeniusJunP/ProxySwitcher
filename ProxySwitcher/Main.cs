@@ -3,6 +3,7 @@ using System;
 using System.Drawing;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Xml.Serialization;
 using static ProxySwitcher.Logger;
@@ -11,11 +12,29 @@ namespace ProxySwitcher
 {
     static class Program
     {
-        public static Logger logger;
+        public readonly static Logger logger;
         public static NetworkMonitor networkMonitor;
         public static Settings settings;
         public static bool isSettingsFormOpen = false; // SettingsForm の状態を管理する変数
 
+        static Program()
+        {
+            // 設定のロード
+            settings = Settings.Load();
+
+            // ログファイルを作成（有効な場合）
+            if (settings != null && settings.EnableLogging == true)
+            {
+                logger = new Logger();
+                Program.logger.Log("Logging started");
+            }
+            else
+            {
+                logger = new NullLogger(); //なんもしないLogger
+            }
+
+            Program.logger.Log("Settings loaded");
+        }
         [STAThread]
         static void Main()
         {
@@ -28,33 +47,22 @@ namespace ProxySwitcher
             {
                 // 既にアプリケーションが起動している場合
                 MessageBoxHelper.ShowInfo("既に起動しています");
+                Program.logger.Log("Application is already running");
                 return;
             }
 
-            // 設定のロード
-            settings = Settings.Load();
+            Program.logger.Log("Application started");
 
-            // ログファイルを作成（有効な場合）
-            if (settings.EnableLogging == true)
-            {
-                logger = new Logger();
-            }
-            else
-            {
-                logger = new NullLogger(); //なんもしないLogger
-            }
-
-            Program.logger.Log("起動しました");
-
-            // ネットワーク監視の開始
+            // ネットワーク監視の開始 ここからNetworkAddressChangedEventHandlerに追加される
             networkMonitor = new NetworkMonitor();
-            Program.logger.Log("NetworkMonitorインスタンスを作成しました");
+            Program.logger.Log("NetworkMonitor instance created");
 
             NotifyIcon trayIcon = new NotifyIcon()
             {
                 Icon = new Icon("icon.ico"), // アイコンファイルを指定
                 Visible = true
             };
+            Program.logger.Log("Tray icon created");
 
             ContextMenuStrip contextMenu = new ContextMenuStrip(); //右クリックメニュー
             contextMenu.Items.Add("設定", null, (sender, e) =>
@@ -63,6 +71,7 @@ namespace ProxySwitcher
                 {
                     // 既にFormが起動している場合
                     MessageBoxHelper.ShowInfo("既に設定が開いています");
+                    Program.logger.Log("Settings form is already open");
                     return;
                 }
                 else
@@ -70,11 +79,13 @@ namespace ProxySwitcher
                     ShowSettings();
                 }
             });
+            Program.logger.Log("Settings menu item added");
 
             //プロキシを変更するボタンも追加
             contextMenu.Items.Add("手動適用", null, (sender, e) =>
             {
                 networkMonitor.ProxyApply();
+                Program.logger.Log("Manual proxy apply executed");
                 if (Program.settings.ShowNotification == true) // 通知を表示する設定が有効な場合
                 {
                     new ToastContentBuilder()
@@ -82,12 +93,14 @@ namespace ProxySwitcher
                         .AddArgument("conversationId", 9813)
                         .AddText("手動でプロキシ設定が適用されました")
                         .Show();
+                    Program.logger.Log("Notification shown for manual proxy apply");
                 }
             });
 
             contextMenu.Items.Add("手動解除", null, (sender, e) =>
             {
-                networkMonitor.ProxyApply();
+                networkMonitor.ProxyRemove();
+                Program.logger.Log("Manual proxy remove executed");
                 if (Program.settings.ShowNotification == true) // 通知を表示する設定が有効な場合
                 {
                     new ToastContentBuilder()
@@ -95,10 +108,17 @@ namespace ProxySwitcher
                         .AddArgument("conversationId", 9813)
                         .AddText("手動でプロキシ設定が解除されました")
                         .Show();
+                    Program.logger.Log("Notification shown for manual proxy remove");
                 }
             });
 
-            contextMenu.Items.Add("終了", null, (sender, e) => { Application.Exit(); trayIcon.Visible = false; });
+            contextMenu.Items.Add("終了", null, (sender, e) =>
+            {
+                Application.Exit();
+                trayIcon.Visible = false;
+                Program.logger.Log("Application exited");
+            });
+            Program.logger.Log("Exit menu item added");
 
             trayIcon.ContextMenuStrip = contextMenu;
 
@@ -108,6 +128,7 @@ namespace ProxySwitcher
                 {
                     // 既にFormが起動している場合
                     MessageBoxHelper.ShowInfo("既に設定が開いています");
+                    Program.logger.Log("Settings form is already open (double-click)");
                     return;
                 }
                 else
@@ -115,8 +136,13 @@ namespace ProxySwitcher
                     ShowSettings();
                 }
             };
+            Program.logger.Log("Tray icon double-click event added");
 
-            networkMonitor.CallProxyAutoApply(); // 初回実行
+            // 初回実行を非同期に変更
+            networkMonitor.CallProxyAutoApply();
+            Program.logger.Log("Initial proxy auto-apply called");
+
+            // メッセージループを開始
             Application.Run();
         }
 
@@ -125,14 +151,14 @@ namespace ProxySwitcher
             // 設定フォームを表示
             SettingsForm settingsForm = new SettingsForm();
             settingsForm.ShowDialog();
-            Program.logger.Log("設定フォーム表示");
+            Program.logger.Log("Settings form shown");
         }
     }
 
     public class Settings
     {
-        public string[] SSIDs { get; set; } = new string[] { "eduroam" };
-        public string ProxyAddress { get; set; } = "202.211.8.4";
+        public string[] SSIDs { get; set; } = new string[] { "example" };
+        public string ProxyAddress { get; set; } = "1.1.1.1";
         public int ProxyPort { get; set; } = 8080;
         public bool EnableLogging { get; set; } = false;
         public string LogFilePath { get; set; } = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
@@ -162,7 +188,7 @@ namespace ProxySwitcher
             }
             catch (Exception ex)
             {
-                Program.logger.Log($"設定の読み込み中にエラーが発生しました: {ex.Message}");
+                Program.logger.Log($"An error occurred while loading the settings: {ex.Message}");
                 throw;
             }
         }
@@ -181,11 +207,11 @@ namespace ProxySwitcher
                 {
                     serializer.Serialize(writer, this);
                 }
-                Program.logger.Log("設定が保存されました");
+                Program.logger.Log("Settings saved");
             }
             catch (Exception ex)
             {
-                Program.logger.Log($"設定の保存中にエラーが発生しました: {ex.Message}");
+                Program.logger.Log($"An error occurred while saving the settings: {ex.Message}");
                 throw;
             }
         }

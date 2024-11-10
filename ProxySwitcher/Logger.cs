@@ -12,7 +12,6 @@ namespace ProxySwitcher
 
         public Logger()
         {
-
             string logFilePath = Path.Combine(Program.settings.LogFilePath, "ProxySwitcherLog.txt");
 
             if (!File.Exists(logFilePath))

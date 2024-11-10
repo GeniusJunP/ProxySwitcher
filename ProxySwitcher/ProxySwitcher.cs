@@ -8,6 +8,7 @@ using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace ProxySwitcher
@@ -16,6 +17,7 @@ namespace ProxySwitcher
     {
         private string currentSSID; // currentSSID変数を宣言
         private readonly string REG_KEY = "HKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Internet Settings";
+        private readonly SemaphoreSlim semaphore = new SemaphoreSlim(1, 1);
 
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
@@ -23,7 +25,7 @@ namespace ProxySwitcher
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect); //最大化判定用
 
-        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)] 
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
         private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount); //最大化判定用
 
         [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
@@ -50,13 +52,17 @@ namespace ProxySwitcher
             {
                 currentSSID = GetCurrentSSID(); // 現在のSSIDをGetCurrentSSIDで取得、currentSSID変数に代入
                 ProxyAutoApply(currentSSID); // currentSSIDに基づくプロキシ設定に
-                Program.logger.Log("SSIDが変更されました");
+                Program.logger.Log("SSID has been changed");
             }
         }
+        //public async Task CallProxyAutoApply()
         public void CallProxyAutoApply()
         {
+            //todo:非同期にする
+
             //強制的に現在のSSIDに基づくプロキシ設定に
             currentSSID = GetCurrentSSID();
+            //await Task.Run(() => ProxyAutoApply(currentSSID));
             ProxyAutoApply(currentSSID);
         }
 
@@ -82,12 +88,16 @@ namespace ProxySwitcher
                     // SSIDの値を抽出して返す
                     return ssidLine.Split(new[] { ':' }, 2).Last().Trim();
                 }
-                return string.Empty;
+                else
+                {
+                    // SSIDが取得できなかった場合は空の文字列を返す
+                    return string.Empty;
+                }
             }
             catch (Exception ex)
             {
                 // 例外が発生した場合はログに記録し、空の文字列を返す
-                Program.logger.Log($"SSIDの取得中に例外が発生しました: {ex.Message}");
+                Program.logger.Log($"Exception occurred while getting SSID: {ex.Message}");
                 MessageBoxHelper.ShowError($"SSIDの取得中に例外が発生しました: {ex.Message}");
                 return string.Empty;
             }
@@ -98,23 +108,28 @@ namespace ProxySwitcher
             //if EnableComfirming == true 確認通知
             if (Program.settings.EnableConfirming == true)
             {
+                Program.logger.Log("EnableConfirming is true. Call WindowMaximizeDetection()");
                 if (WindowMaximizeDetection() == false) //確認ポップアップフェーズ
                 {
+                    Program.logger.Log("Window is not maximized");
                     if (DialogResult.No == MessageBox.Show("SSIDが変更されました。設定を変更しますか？", "プロキシ設定変更確認", MessageBoxButtons.YesNo)) //Noだったら
                     {
+                        Program.logger.Log("User selected No in the confirmation dialog");
                         return; //ApplyProxySettingsを終了
                     }
                 }
                 else　//ゲーム中などにウィンドウのフォーカスが移動しないようにする
                 {
+                    Program.logger.Log("Window is maximized, entering wait loop");
                     while (WindowMaximizeDetection() == true)　//ウィンドウが最大化されている間は待機
                     {
                         Thread.Sleep(10000); // 10秒待つ
                     }
 
-
+                    Program.logger.Log("Window is no longer maximized. Show dialog.");
                     if (DialogResult.No == MessageBox.Show("SSIDが変更されました。設定を変更しますか？", "プロキシ設定変更確認", MessageBoxButtons.YesNo)) //Noだったら
                     {
+                        Program.logger.Log("User selected No in the confirmation dialog");
                         return; //ApplyProxySettingsを終了
                     }
                 }
@@ -123,6 +138,7 @@ namespace ProxySwitcher
             if (Array.Exists(Program.settings.SSIDs, s => s == ssid)) //SSID確認処理フェーズ
             {
                 ProxyApply();//適用
+                Program.logger.Log("Call ProxyApply()");
 
                 if (Program.settings.ShowNotification == true) // 通知を表示する設定が有効な場合
                 {
@@ -161,46 +177,77 @@ namespace ProxySwitcher
 
         public void ProxyApply()
         {
+            semaphore.Wait();
             // プロキシを設定するロジック
             try
             {
+                Program.logger.Log("Start ProxyApply()");
+                Program.logger.Log("Finding user-set ProxyAddress");
                 // プロキシホストのアドレスを取得し、IPv4アドレスがあるか確認
                 var addresses = Dns.GetHostAddresses(Program.settings.ProxyAddress).Where(ip => ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
+                Program.logger.Log("Find Completed");
+
                 if (!addresses.Any())
                 {
-                    throw new Exception("IPv4アドレスが見つかりません");
+                    throw new Exception("No IPv4 address found");
                 }
 
                 // レジストリにプロキシの有効化、プロキシサーバの設定、ローカルおよび除外アドレスの設定を行う
+                Program.logger.Log("Call Registry.SetValue()");
                 Registry.SetValue(REG_KEY, "ProxyEnable", 1);
                 Registry.SetValue(REG_KEY, "ProxyServer", $"{Program.settings.ProxyAddress}:{Program.settings.ProxyPort}");
                 Registry.SetValue(REG_KEY, "ProxyOverride", "LOCAL_ADDR");
+                Program.logger.Log("Registry.SetValue() Completed");
 
                 // 環境変数の設定
                 string proxyValue = $"http://{Program.settings.ProxyAddress}:{Program.settings.ProxyPort}";
+                Program.logger.Log("Call SetEnviromentVariable()");
                 Environment.SetEnvironmentVariable("HTTP_PROXY", proxyValue, EnvironmentVariableTarget.Process);
                 Environment.SetEnvironmentVariable("HTTPS_PROXY", proxyValue, EnvironmentVariableTarget.Process);
                 Environment.SetEnvironmentVariable("HTTP_PROXY", proxyValue, EnvironmentVariableTarget.User);
                 Environment.SetEnvironmentVariable("HTTPS_PROXY", proxyValue, EnvironmentVariableTarget.User);
-
-                Program.logger.Log("プロキシ設定が適用されました");
+                Program.logger.Log("SetEnviromentVariable() Completed");
+                Program.logger.Log("Proxy settings have been applied");
             }
             catch (Exception ex)
             {
                 ProxyRemove();
-                Program.logger.Log($"プロキシ設定が解除されました（例外処理）: {ex.Message}");
+                Program.logger.Log($"Proxy settings have been removed (exception handling): {ex.Message}");
+            }
+            finally
+            {
+                semaphore.Release();
             }
         }
 
         public void ProxyRemove()
         {
+            semaphore.Wait();
             // プロキシを解除するロジック
-            Registry.SetValue(REG_KEY, "ProxyEnable", 0);
-            Environment.SetEnvironmentVariable("HTTP_PROXY", null, EnvironmentVariableTarget.Process);
-            Environment.SetEnvironmentVariable("HTTPS_PROXY", null, EnvironmentVariableTarget.Process);
-            Environment.SetEnvironmentVariable("HTTP_PROXY", null, EnvironmentVariableTarget.User);
-            Environment.SetEnvironmentVariable("HTTPS_PROXY", null, EnvironmentVariableTarget.User);
-            Program.logger.Log("プロキシ設定が解除されました");
+            try
+            {
+                Program.logger.Log("Start ProxyRemove()");
+                Program.logger.Log("Call Registry.SetValue()");
+                Registry.SetValue(REG_KEY, "ProxyEnable", 0);
+                Program.logger.Log("Registry.SetValue() Completed");
+
+                Program.logger.Log("Call SetEnvironmentVariable()");
+                Environment.SetEnvironmentVariable("HTTP_PROXY", null, EnvironmentVariableTarget.Process);
+                Environment.SetEnvironmentVariable("HTTPS_PROXY", null, EnvironmentVariableTarget.Process);
+                Environment.SetEnvironmentVariable("HTTP_PROXY", null, EnvironmentVariableTarget.User);
+                Environment.SetEnvironmentVariable("HTTPS_PROXY", null, EnvironmentVariableTarget.User);
+                Program.logger.Log("SetEnvironmentVariable() Completed");
+
+                Program.logger.Log("Proxy settings have been removed");
+            }
+            catch (Exception ex)
+            {
+                Program.logger.Log($"Exception occurred while removing proxy settings: {ex.Message}");
+            }
+            finally
+            {
+                semaphore.Release();
+            }
         }
 
 
@@ -208,11 +255,11 @@ namespace ProxySwitcher
         {
             // フォアグラウンドウィンドウのハンドルを取得
             IntPtr hWnd = GetForegroundWindow();
-            Program.logger.Log("WindowMaximizeDetectionメソッド開始");
+            Program.logger.Log("WindowMaximizeDetection method started");
 
             if (hWnd == IntPtr.Zero)
             {
-                Program.logger.Log("ウィンドウのハンドルの取得に失敗しました");
+                Program.logger.Log("Failed to get window handle");
                 return false;
             }
 
@@ -241,16 +288,16 @@ namespace ProxySwitcher
                     bool isNullFocus = string.IsNullOrEmpty(className.ToString()) || string.IsNullOrEmpty(windowTitle.ToString());
                     if (isDesktop || isNullFocus)
                     {
-                        Program.logger.Log("デスクトップがフォーカスされている||なにもフォーカスしていない = falseを返しました");
+                        Program.logger.Log("Desktop is focused or nothing is focused = returned false");
                         return false;
                     }
 
-                    Program.logger.Log("ウィンドウは全画面です true");
+                    Program.logger.Log("Window is full screen = returned true");
                     return true;
                 }
                 else
                 {
-                    Program.logger.Log("ウィンドウは全画面ではないです false");
+                    Program.logger.Log("Window is not full screen = returned false");
                     return false;
                 }
             }
