@@ -17,6 +17,9 @@ Windows環境でWi-Fiのネットワーク切り替え時に自動的にプロ�
 - 「手動適用」「手動解除」オプションを提供
 
 ### 設定機能
+
+![設定画面](https://github.com/GeniusJunP/ProxySwitcher/blob/Assets/SettingsForm.png "設定画面")
+
 #### プロキシ設定
 - 複数SSIDの登録（カンマ区切りで指定可能）
 - プロキシサーバーアドレスの設定
