@@ -158,7 +158,7 @@ namespace ProxySwitcher
     public class Settings
     {
         public string[] SSIDs { get; set; } = new string[] { "example" };
-        public string ProxyAddress { get; set; } = "1.1.1.1";
+        public string ProxyAddress { get; set; } = "192.168.1.100";
         public int ProxyPort { get; set; } = 8080;
         public bool EnableLogging { get; set; } = false;
         public string LogFilePath { get; set; } = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
