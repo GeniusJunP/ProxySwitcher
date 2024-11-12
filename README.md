@@ -10,15 +10,17 @@ Windows環境でWi-Fiのネットワーク切り替え時に自動的にプロ�
 ### プロキシ設定の自動切り替え
 - 指定したSSIDに接続時、自動的にプロキシ設定を適用
 - 指定外のSSID（有線接続・未接続を含む）では自動的にプロキシ設定を解除
-- プロキシ設定の変更時に通知を表示（Windows標準の通知システムを使用）
+- プロキシ設定の変更時に通知を表示（Windows標準のUWP通知機能を使用）
 
 ### プロキシ設定の手動切り替え
-- タスクバーアイコンから右クリックで操作可能
+- タスクバーアイコンから右クリック→各オプションから操作可能
 - 「手動適用」「手動解除」オプションを提供
 
 ### 設定機能
 
 ![設定画面](https://github.com/GeniusJunP/ProxySwitcher/blob/Assets/SettingsForm.png "設定画面")
+
+- タスクバーアイコンから右クリック→設定から操作可能
 
 #### プロキシ設定
 - 複数SSIDの登録（カンマ区切りで指定可能）
@@ -58,4 +60,5 @@ Windows環境でWi-Fiのネットワーク切り替え時に自動的にプロ�
 ## ライセンス
 本ソフトウェアはWTFPLライセンスの下で公開されています。詳細は[LICENSE](LICENSE)ファイルをご覧ください。
 
+[![WTFPL](http://www.wtfpl.net/wp-content/uploads/2012/12/wtfpl-badge-4.png)](http://www.wtfpl.net/)
 Copyright (c) 2024 [GeniusJunP]
