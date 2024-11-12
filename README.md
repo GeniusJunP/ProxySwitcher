@@ -15,6 +15,7 @@ Windows環境でWi-Fiのネットワーク切り替え時に自動的にプロ�
 - プロキシ設定の変更時に通知を表示（Windows標準のUWP通知機能を使用）
 - 設定変更の確認ポップアップ機能
     - 上記確認機能において、**ゲームなど全画面アプリケーション実行時の通知制御**が実装されています。
+
       具体的には、現在アクティブなウィンドウが全画面表示のとき、全画面表示が解除される、または別のウィンドウにフォーカスされるまでポップアップを待機するため、**ユーザー体験を妨げない通知タイミング**を実現することができます。
 
 ### プロキシ設定の手動切り替え
@@ -64,6 +65,7 @@ Windows環境でWi-Fiのネットワーク切り替え時に自動的にプロ�
 本ソフトウェアはWTFPLライセンスの下で公開されています。詳細は[LICENSE](LICENSE)ファイルをご覧ください。
 
 Copyright (C) 2024 [GeniusJunP]
+
 This work is free. You can redistribute it and/or modify it under the
 terms of the Do What The Fuck You Want To Public License, Version 2,
 as published by Sam Hocevar. See the [LICENSE](LICENSE) file for more details.
